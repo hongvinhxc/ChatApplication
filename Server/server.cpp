@@ -4,7 +4,9 @@
 #include <process.h>
 #include <string> 
 #include <sstream>
-
+#include<vector>
+#include<map>
+#include <fstream>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -12,18 +14,53 @@
 
 using namespace std;
 
+struct User {
+	string username = "";
+	string password = "";
+	bool isLogin = false;
+};
+
+map<string, User> users;
+map<int, User> socketUsers;
+
+void showUserOnline(SOCKET sock) {
+	int count = 0;
+	string msg = "";
+		for (auto it = socketUsers.begin(); it != socketUsers.end(); ++it) {
+		count++;
+		msg = msg + it->second.username + "\n";
+	}
+		msg = "Danh sach " + to_string(count) + " thanh vien online\n" + msg;
+		send(sock, msg.c_str(), msg.size() + 1, 0);
+}
+
 void commandAction(string cmd, SOCKET sock) {
 	cout << "Command: " << cmd << endl;
 	
-	if (cmd == "\help") {
+	if (cmd == "\\help") {
 
 	}
-	else if (cmd == "\online") {
+	else if (cmd == "\\online") {
+		showUserOnline(sock);
+	}
+}
 
+void loadUsers() {
+	// Khai bao va mo file
+	ifstream infile("user.txt");
+	string username, password;
+	while (infile >> username >> password)
+	{
+		User user = User();
+		user.username = username;
+		user.password = password;
+		users[username] = user;
 	}
 }
 
 int main(int argc, char* argv[]) {
+
+	loadUsers();
 
 	// Init port from command-line arguments
 	int port = 5500;
@@ -79,8 +116,11 @@ int main(int argc, char* argv[]) {
 				// Thêm connection mới vào tập FD_SET
 				FD_SET(client, &initfds);
 
+				// Thêm id socket vào tập socketUsers
+				socketUsers[client] = User();
+
 				// Send a welcome message to the connected client
-				string welcomeMsg = "SERVER: Chao mung ban den voi phong chat!";
+				string welcomeMsg = "SERVER: Chao mung ban den voi phong chat! Vui long dang nhap de bat dau.\nTai khoan:";
 				send(client, welcomeMsg.c_str(), welcomeMsg.size() + 1, 0);
 			}
 			else
@@ -101,7 +141,35 @@ int main(int argc, char* argv[]) {
 				}
 				else
 				{
-					cout << "Recieve from " << sock << ": " << buf << endl;
+					// Kiem tra dang nhap
+					User currentUser = socketUsers[sock];
+					if (!currentUser.isLogin) {
+						if (currentUser.username == "") {
+							socketUsers[sock].username = buf;
+							string msg = "Mat khau:";
+							send(sock, msg.c_str(), msg.size() + 1, 0);
+						}
+						else {
+							// check login
+							string username = socketUsers[sock].username;
+							string password = buf;
+
+							if (users[username].password == password) {
+								socketUsers[sock].isLogin = true;
+								cout << currentUser.username << " da dang nhap" << endl;
+								string msg = "Ban da dang nhap thanh cong! Bat dau chat.";
+								send(sock, msg.c_str(), msg.size() + 1, 0);
+							}
+							else {
+								socketUsers[sock].username = "";
+								string msg = "Ban da nhap sai tai khoan hoac mat khau!\nTai khoan:";
+								send(sock, msg.c_str(), msg.size() + 1, 0);
+							}
+						}
+						continue;
+					}
+
+					cout << "Recieve from " << currentUser.username << ": " << buf << endl;
 
 					// Kiểm tra xem có phải command hay không? Command bắt đầu bằng '\' 
 					if (buf[0] == '\\')
@@ -122,18 +190,18 @@ int main(int argc, char* argv[]) {
 							continue;
 						}
 
-						ostringstream ss;
+						ostringstream msg;
 
 						if (outSock != sock)
 						{
-							ss << "NGUOI DUNG #" << sock << ":" << buf << "\r\n";
+							msg << currentUser.username << ": " << buf << "\r\n";
 						}
 						else
 						{
-							ss << "TOI:" << buf << "\r\n";
+							msg << "TOI: " << buf << "\r\n";
 						}
 
-						string strOut = ss.str();
+						string strOut = msg.str();
 						send(outSock, strOut.c_str(), strOut.size() + 1, 0);
 					}
 				}
