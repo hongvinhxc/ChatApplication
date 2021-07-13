@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 #include <winsock2.h>
 #include <WS2tcpip.h>
 #include <process.h>
@@ -8,6 +8,29 @@
 #define BUFF_SIZE 2048
 
 using namespace std;
+
+// Function to recieve response from server
+unsigned __stdcall recvThread(void* param) {
+	char buff[BUFF_SIZE];
+	int ret;
+	SOCKET connectedSocket = (SOCKET)param;
+
+	while (true)
+	{
+		// Receive message
+		ret = recv(connectedSocket, buff, BUFF_SIZE, 0);
+		if (ret == SOCKET_ERROR) {
+			if (WSAGetLastError() == WSAETIMEDOUT)  continue;
+			else cout << "Error " << WSAGetLastError() << endl;
+		}
+		else if (strlen(buff) > 0) {
+			buff[ret] = '\0';
+			cout << buff << endl;
+		}
+	}
+
+
+}
 
 int main(int argc, char* argv[]) {
 
@@ -47,26 +70,16 @@ int main(int argc, char* argv[]) {
 	char buff[BUFF_SIZE];
 	int ret, messageLen;
 
+	// Start recieve server response thread
+	_beginthreadex(0, 0, recvThread, (void*)client, 0, 0);
+
 	while (true)
 	{
 		// Send message
-		cout << "Send to server: ";
 		gets_s(buff, BUFF_SIZE);
 		messageLen = strlen(buff);
-		if (messageLen == 0) break;
 		ret = send(client, buff, messageLen, 0);
 		if (ret == SOCKET_ERROR) cout << "Error " << WSAGetLastError() << endl;
-
-		// Receive echo message
-		ret = recv(client, buff, BUFF_SIZE, 0);
-		if (ret == SOCKET_ERROR) {
-			if (WSAGetLastError() == WSAETIMEDOUT)   cout << "Time-out!" << endl;
-			else cout << "Error " << WSAGetLastError() << endl;
-		}
-		else if (strlen(buff) > 0) {
-			buff[ret] = '\0';
-			cout << "Receive from server: " << buff << endl;
-		}
 	}
 
 	cout << "Close client" << endl;
