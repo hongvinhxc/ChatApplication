@@ -2,6 +2,7 @@
 #include <winsock2.h>
 #include <WS2tcpip.h>
 #include <process.h>
+#include <windows.h>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -21,11 +22,20 @@ unsigned __stdcall recvThread(void* param) {
 		ret = recv(connectedSocket, buff, BUFF_SIZE, 0);
 		if (ret == SOCKET_ERROR) {
 			if (WSAGetLastError() == WSAETIMEDOUT)  continue;
+			else if (WSAGetLastError() == WSAENETRESET || WSAGetLastError() == WSAECONNABORTED || WSAGetLastError() == WSAECONNRESET) {
+				cout << "Error " << WSAGetLastError() << endl;
+				cout << "Close client!" << endl;;
+				exit(0);
+			}
 			else cout << "Error " << WSAGetLastError() << endl;
 		}
 		else if (strlen(buff) > 0) {
 			buff[ret] = '\0';
-			cout << buff << endl;
+			if ((string)buff == "\\out") {
+				cout << "Ban da dang xuat.";
+				exit(0);
+			}
+			else cout << buff << endl;
 		}
 	}
 
@@ -34,8 +44,17 @@ unsigned __stdcall recvThread(void* param) {
 
 int main(int argc, char* argv[]) {
 
-	char host[] = "127.0.0.1";
-	int port = 5500;
+	string host;
+	int port;
+	if (argc < 3) {
+		cout << "Need pass host and port by format client.exe <host> <port>" << endl;
+		return 0;
+	}
+
+	host = argv[1];
+	port = atoi(argv[2]);
+
+	cout << "Client will connect to server at host " << host << " and port " << port << "." << endl;
 
 	// Init winsock
 	WSADATA wsaData;
@@ -57,7 +76,7 @@ int main(int argc, char* argv[]) {
 	sockaddr_in	serverAddr;
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_port = htons(port);
-	inet_pton(AF_INET, host, &serverAddr.sin_addr);
+	inet_pton(AF_INET, host.c_str(), &serverAddr.sin_addr);
 
 
 	// Request to connect server

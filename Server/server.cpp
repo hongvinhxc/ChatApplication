@@ -27,18 +27,37 @@ void showUserOnline(SOCKET sock) {
 	int count = 0;
 	string msg = "";
 		for (auto it = socketUsers.begin(); it != socketUsers.end(); ++it) {
-		count++;
-		msg = msg + it->second.username + "\n";
-	}
+			if (it->second.isLogin) {
+				count++;
+				msg = msg + it->second.username + "\n";
+			}
+		}
 		msg = "Danh sach " + to_string(count) + " thanh vien online\n" + msg;
 		send(sock, msg.c_str(), msg.size() + 1, 0);
 }
 
-void commandAction(string cmd, SOCKET sock) {
+void showHelp(SOCKET sock) {
+	string msg = "SERVER: Danh sach cac lenh: \n\t=Join: Vao phong\n\t=Exit: Thoat\n\t=Online: Xem DS nguoi trong phong\n\t=Help: Hien thi DS lenh\n";
+	send(sock, msg.c_str(), msg.size() + 1, 0);
+}
+
+void clientExit(SOCKET sock, fd_set initfds) {
+	string msg = "\\out";
+	send(sock, msg.c_str(), msg.size() + 1, 0);
+	cout << socketUsers[sock].username << " da dang xuat socket " << sock << "\n" << endl;
+	socketUsers[sock].isLogin = false;
+	socketUsers.erase(sock);
+	cout << "Current socket connected: " << initfds.fd_count << endl;
+}
+
+void commandAction(string cmd, SOCKET sock, fd_set initfds) {
 	cout << "Command: " << cmd << endl;
 	
 	if (cmd == "\\help") {
-
+		showHelp(sock);
+	}
+	else if (cmd == "\\exit") {
+		clientExit(sock, initfds);
 	}
 	else if (cmd == "\\online") {
 		showUserOnline(sock);
@@ -60,10 +79,18 @@ void loadUsers() {
 
 int main(int argc, char* argv[]) {
 
-	loadUsers();
-
 	// Init port from command-line arguments
-	int port = 5500;
+	int port;
+	if (argc > 1) {
+		port = atoi(argv[1]);
+		cout << "Server will start at port " << port << "." << endl;
+	}
+	else {
+		port = 5500;
+		cout << "Server will start at default port 5500." << endl;
+	}
+
+	loadUsers();
 
 	// Init winsock
 	WSADATA wsaData;
@@ -175,7 +202,7 @@ int main(int argc, char* argv[]) {
 					if (buf[0] == '\\')
 					{
 						string cmd = string(buf, ret);
-						commandAction(cmd, sock);
+						commandAction(cmd, sock, initfds);
 
 						continue;
 					}
@@ -190,9 +217,13 @@ int main(int argc, char* argv[]) {
 							continue;
 						}
 
+						if (!socketUsers[outSock].isLogin) {
+							continue;
+						}
+
 						ostringstream msg;
 
-						if (outSock != sock)
+						if (outSock != sock && socketUsers[outSock].username != socketUsers[sock].username)
 						{
 							msg << currentUser.username << ": " << buf << "\r\n";
 						}
